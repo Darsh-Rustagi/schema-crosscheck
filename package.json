@@ -1,0 +1,24 @@
+{
+  "name": "schema-sentinel",
+  "version": "0.1.0",
+  "description": "Detect potential validation gaps in JSON Schema conversions",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "bin": {
+    "schema-sentinel": "./src/cli.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
