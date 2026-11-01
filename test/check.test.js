@@ -105,8 +105,35 @@ test("accepts boolean JSON Schemas", () => {
     assert.deepEqual(checkSchema(false), []);
 });
 
+test("visits schema-valued keywords without treating annotation data as schemas", () => {
+    const schema = {
+        properties: { a: { additionalProperties: { $dynamicRef: "#x" } } },
+        $defs: { "x/y~z": { items: [{ $dynamicRef: "#x" }] } },
+        if: { type: "string" }, then: { $dynamicRef: "#x" },
+        else: false, not: { $dynamicRef: "#x" },
+        anyOf: [{ $dynamicRef: "#x" }],
+        default: { $dynamicRef: "ordinary data" },
+        const: { $dynamicRef: "ordinary data" }
+    };
+    const paths = checkSchema(schema, { unsupportedKeywords: ["$dynamicRef"] }).map((issue) => issue.path);
+    assert.deepEqual(paths, [
+        "/$defs/x~1y~0z/items/0/$dynamicRef",
+        "/properties/a/additionalProperties/$dynamicRef",
+        "/not/$dynamicRef",
+        "/then/$dynamicRef",
+        "/anyOf/0/$dynamicRef"
+    ]);
+});
+
 test("rejects invalid top-level schema values", () => {
     assert.throws(() => checkSchema(null), TypeError);
     assert.throws(() => checkSchema("invalid"), TypeError);
     assert.throws(() => checkSchema([]), TypeError);
+});
+
+test("validates scanner options", () => {
+    assert.throws(() => checkSchema({}, null), /Options must be/);
+    assert.throws(() => checkSchema({}, { unsupportedKeywords: "$ref" }), /unsupportedKeywords/);
+    assert.throws(() => checkSchema({}, { unsupportedKeywords: [""] }), /unsupportedKeywords/);
+    assert.throws(() => checkSchema({}, { target: " " }), /target/);
 });

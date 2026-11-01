@@ -1,0 +1,9 @@
+[
+  {
+    "name": "nested value has wrong type",
+    "input": {
+      "value": 1,
+      "child": { "value": "not a number" }
+    }
+  }
+]

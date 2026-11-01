@@ -1,7 +1,8 @@
 {
   "name": "schema-sentinel",
   "version": "0.1.0",
-  "description": "Detect potential validation gaps in JSON Schema conversions",
+  "description": "Scan JSON Schemas and compare Ajv and Zod validation results",
+  "keywords": ["json-schema", "ajv", "zod", "validation", "testing", "cli"],
   "type": "module",
   "main": "./src/index.js",
   "exports": {
@@ -12,7 +13,9 @@
   },
   "files": [
     "src",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "schemas"
   ],
   "scripts": {
     "test": "node --test"

@@ -1,0 +1,4 @@
+[
+  { "name": "valid user", "input": { "name": "Alex", "age": 20 } },
+  { "name": "invalid age", "input": { "name": "Alex", "age": "wrong" } }
+]

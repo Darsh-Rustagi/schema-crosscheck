@@ -1,0 +1,168 @@
+SCHEMA SENTINEL — PROJECT EXPLANATION
+====================================
+
+WHAT THE PROJECT DOES
+---------------------
+Schema Sentinel is a JavaScript npm package for working with JSON Schema and
+validator conversions. It provides two related tools:
+
+1. A configurable static scan that finds selected schema keywords wherever
+   they appear in schema positions.
+2. A differential comparison that checks whether Ajv and a Zod 4 schema
+   converted from the same JSON Schema accept or reject the same test inputs.
+
+The scanner reports rules supplied by the caller. It does not establish that a
+validator has a defect. The comparison reports results for the supplied schema
+and inputs only; agreement on those examples is not proof of equivalence for
+all possible values.
+
+TECHNOLOGY AND DEPENDENCIES
+--------------------------
+- Plain JavaScript with ES modules; there is no TypeScript or compilation step.
+- Node.js 20 or newer is the declared minimum.
+- Ajv validates the original JSON Schema.
+- Zod 4 imports the JSON Schema using its fromJSONSchema API and validates the
+  converted schema.
+- Node's built-in test runner and assert module are used for tests. The CLI and
+  tests otherwise rely on Node.js built-ins rather than extra packages.
+
+PROJECT FILES
+-------------
+package.json
+  Defines the package name and version, ES module entry, public package export,
+  schema-sentinel CLI executable, included package files, npm test command,
+  Node.js requirement, MIT license, and Ajv/Zod dependencies.
+
+package-lock.json
+  Locks the installed dependency versions for repeatable installs.
+
+src/index.js
+  Public library entry. It exports checkSchema and compareSchema.
+
+src/check.js
+  Implements checkSchema. It validates the top-level schema and options, then
+  walks schema-valued JSON Schema locations such as properties, definitions,
+  items, composition keywords, and conditionals. It returns one finding per
+  configured unsupported keyword. Each finding includes the keyword, target,
+  JSON Pointer path, and diagnostic. JSON Pointer segments escape slash and
+  tilde characters correctly. Annotation data such as const and default is
+  treated as data, not as another schema.
+
+src/compare.js
+  Implements compareSchema. It selects an Ajv implementation based on the
+  schema dialect: draft-07 by default, draft 2019-09, or draft 2020-12 when
+  declared by $schema. It compiles the original schema with Ajv, imports the
+  schema with Zod, and runs both validators against each supplied test input.
+  Results retain acceptance, validation errors, case names, and input indexes.
+  Disagreements are collected in mismatches. Known unsupported Zod features
+  such as $dynamicRef and $dynamicAnchor are identified in the report.
+  Compilation and conversion failures are returned explicitly rather than
+  being counted as successful comparisons.
+
+src/cli.js
+  Executable command-line interface. The check command scans a JSON schema file
+  or directory. The compare command reads a schema JSON file and a test-case
+  JSON file. Text is the default output; --format json writes machine-readable
+  output to stdout. Directory scanning ignores hidden directories,
+  node_modules, and files ending in .cases.json.
+
+schemas/user.schema.json
+  Small example object schema requiring a string name and non-negative integer
+  age.
+
+schemas/user.cases.json
+  Named valid and invalid inputs used to demonstrate ordinary comparisons.
+
+schemas/dynamic-ref.schema.json
+  Recursive draft 2020-12 schema using $dynamicAnchor and $dynamicRef. A nested
+  value is required to be a number.
+
+schemas/dynamic-ref.cases.json
+  Counterexample with a string in that nested numeric location. With the
+  versions locked in this project, Ajv rejects the value and Zod accepts it.
+  This is reported as a disagreement involving a Zod-unsupported feature.
+
+schemas/schemas.json
+  Existing small scanner fixture containing a nested $dynamicRef keyword.
+
+test/check.test.js
+  Tests scanner behavior, nested schema locations, pointer escaping, boolean
+  schemas, option validation, and avoiding false traversal into arbitrary data.
+
+test/compare.test.js
+  Tests validator agreement, the dynamic-reference counterexample, explicit
+  compiler and converter failures, empty inputs, and boolean schemas.
+
+test/cli.test.js
+  Tests command help and argument errors, text and JSON output, exit codes,
+  missing and malformed files, invalid schemas, and ignored scan directories.
+
+README.md
+  User documentation with installation, API, CLI, examples, supported drafts,
+  limitations, development commands, and dependency rationale.
+
+LICENSE
+  MIT license text, matching the license declared in package.json.
+
+.gitignore
+  Excludes installed modules, npm debug logs, macOS metadata, and coverage
+  output from version control.
+
+PUBLIC JAVASCRIPT API
+---------------------
+checkSchema(schema, options)
+  schema must be an object or boolean JSON Schema. options can include:
+    target: a descriptive validator name, defaulting to "target validator".
+    unsupportedKeywords: an array of keywords to report.
+  Returns an array of diagnostic objects. The rules are caller-supplied and
+  do not imply that the named validator actually mishandles those keywords.
+
+compareSchema(schema, inputs, options)
+  schema must be an object or boolean JSON Schema. inputs must be a non-empty
+  array. Each item may be a raw input value or a named case with this shape:
+    { "name": "case name", "input": { "example": true } }
+  The result includes conversionSucceeded, totalInputs, agreements,
+  mismatchCount, per-input results, mismatches, unsupportedFeatures, and a
+  conversionError when schema compilation or Zod conversion fails. Each
+  validator result includes an accepts boolean and useful validation errors.
+
+COMMAND-LINE USE
+----------------
+Run from the repository root:
+
+  node src/cli.js --help
+  node src/cli.js check ./schemas --target Zod --unsupported '$dynamicRef'
+  node src/cli.js check ./schemas --target Zod --unsupported '$dynamicRef' --format json
+  node src/cli.js compare ./schemas/user.schema.json ./schemas/user.cases.json
+  node src/cli.js compare ./schemas/dynamic-ref.schema.json ./schemas/dynamic-ref.cases.json
+
+The CLI uses these exit codes:
+  0 — command succeeded with no configured warnings or mismatches.
+  1 — scanner warning or validation mismatch found.
+  2 — invalid arguments, unreadable or malformed file, schema compilation
+      failure, conversion failure, or another execution error.
+
+TESTING AND PACKAGING
+--------------------
+Run the complete test suite with:
+
+  npm test
+
+Inspect the publishable package contents without creating a publication with:
+
+  npm pack --dry-run
+
+LIMITATIONS
+-----------
+- Ajv selection is implemented for draft-07, draft 2019-09, and draft 2020-12.
+  Other declared dialects are reported as unsupported.
+- Zod's JSON Schema importer does not implement every JSON Schema feature or
+  semantic detail. Conversion may fail or unsupported keywords may not enforce
+  the same constraints as Ajv.
+- The $dynamicRef behavior above was reproduced with Ajv 8.20.0 and Zod 4.5.0.
+  Dependency updates may change that result; rerun the included fixture after
+  upgrading dependencies.
+- Differential checks cover only the specific inputs provided. A set of
+  agreements cannot prove universal validator equivalence.
+- The scanner is static and configurable; its findings are warnings based on
+  caller-selected keywords, not proof of a validator compatibility bug.

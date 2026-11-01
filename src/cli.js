@@ -1,269 +1,130 @@
 #!/usr/bin/env node
-
 import { readFile, readdir, stat } from "node:fs/promises";
 import { extname, relative, resolve } from "node:path";
 import { checkSchema } from "./check.js";
+import { compareSchema } from "./compare.js";
 
-function printUsage() {
-    console.log(`
-Schema Sentinel
+const usage = `Schema Sentinel — scan and compare JSON Schema validation
 
 Usage:
   schema-sentinel check <file-or-directory> --target <name> --unsupported <keywords>
+  schema-sentinel compare <schema.json> <cases.json> [--format text|json]
 
 Options:
-  --target <name>                 Name of the target validator
-  --unsupported <keywords>        Comma-separated unsupported keywords
+  --target <name>                 Target validator name (check)
+  --unsupported <keywords>        Comma-separated keyword names (check)
   --format <text|json>            Output format (default: text)
-  --help                          Show this help message
+  --help, -h                      Show this help
 
-Example:
-  schema-sentinel check ./schemas --target Zod --unsupported '$dynamicRef'
-`);
-}
+Compare case files contain an array of { "name": "...", "input": ... } objects.
+Exit codes: 0 success/no findings, 1 warnings or mismatches, 2 execution error.
+`;
 
-function parseArguments(args) {
-    const options = {
-        target: "",
-        unsupportedKeywords: [],
-        format: "text"
-    };
-
+function parseArgs(args) {
+    if (args.length === 0 || args.includes("--help") || args.includes("-h")) return { help: true };
+    const command = args[0];
+    if (!["check", "compare"].includes(command)) throw new Error(`Unknown command: ${command}`);
     const positional = [];
-
-    for (let i = 0; i < args.length; i++) {
+    const options = { format: "text", target: "", unsupportedKeywords: [] };
+    for (let i = 1; i < args.length; i++) {
         const arg = args[i];
-
-        if (arg === "--help" || arg === "-h") {
-            return { help: true };
-        }
-
-        if (
-            arg === "--target" ||
-            arg === "--unsupported" ||
-            arg === "--format"
-        ) {
+        if (["--format", "--target", "--unsupported"].includes(arg)) {
             const value = args[++i];
-
-            if (!value || value.startsWith("--")) {
-                throw new Error(`Missing value for ${arg}`);
-            }
-
-            if (arg === "--target") {
-                options.target = value;
-            }
-
-            if (arg === "--unsupported") {
-                options.unsupportedKeywords = value
-                    .split(",")
-                    .map((keyword) => keyword.trim())
-                    .filter(Boolean);
-            }
-
-            if (arg === "--format") {
-                options.format = value;
-            }
-
-            continue;
-        }
-
-        if (arg.startsWith("--")) {
-            throw new Error(`Unknown option: ${arg}`);
-        }
-
-        positional.push(arg);
+            if (!value || value.startsWith("--")) throw new Error(`Missing value for ${arg}`);
+            if (arg === "--format") options.format = value;
+            if (arg === "--target") options.target = value;
+            if (arg === "--unsupported") options.unsupportedKeywords.push(...value.split(",").map((v) => v.trim()).filter(Boolean));
+        } else if (arg.startsWith("-")) throw new Error(`Unknown option: ${arg}`);
+        else positional.push(arg);
     }
-
-    if (positional[0] !== "check" || !positional[1]) {
-        throw new Error("Provide the check command and a file or directory.");
-    }
-
-    if (!options.target) {
-        throw new Error("Provide a target using --target.");
-    }
-
-    if (options.unsupportedKeywords.length === 0) {
-        throw new Error(
-            "Provide at least one keyword using --unsupported."
-        );
-    }
-
-    if (!["text", "json"].includes(options.format)) {
-        throw new Error('Format must be "text" or "json".');
-    }
-
-    return {
-        help: false,
-        input: resolve(positional[1]),
-        ...options
-    };
+    if (!["text", "json"].includes(options.format)) throw new Error('Format must be "text" or "json".');
+    if (command === "check") {
+        if (positional.length !== 1) throw new Error("check requires exactly one file or directory.");
+        if (!options.target.trim()) throw new Error("check requires --target <name>.");
+        if (!options.unsupportedKeywords.length) throw new Error("check requires --unsupported <keywords>.");
+    } else if (positional.length !== 2) throw new Error("compare requires a schema file and a cases file.");
+    return { help: false, command, positional, ...options };
 }
 
-async function findSchemaFiles(inputPath) {
-    const info = await stat(inputPath);
+async function readJson(path) {
+    const content = await readFile(path, "utf8");
+    try { return JSON.parse(content); }
+    catch (error) { throw new Error(`Invalid JSON in ${path}: ${error.message}`); }
+}
 
-    if (info.isFile()) {
-        return [inputPath];
-    }
-
-    if (!info.isDirectory()) {
-        throw new Error("Input must be a JSON file or a directory.");
-    }
-
+async function findSchemas(path) {
+    const info = await stat(path);
+    if (info.isFile()) return [path];
+    if (!info.isDirectory()) throw new Error(`Not a file or directory: ${path}`);
     const files = [];
-
-    async function walk(directory) {
-        const entries = await readdir(directory, {
-            withFileTypes: true
-        });
-
+    async function walk(dir) {
+        const entries = await readdir(dir, { withFileTypes: true });
         entries.sort((a, b) => a.name.localeCompare(b.name));
-
         for (const entry of entries) {
-            const fullPath = resolve(directory, entry.name);
-
-            if (
-                entry.isDirectory() &&
-                ["node_modules", ".git", ".next"].includes(entry.name)
-            ) {
-                continue;
-            }
-
-            if (entry.isDirectory()) {
-                await walk(fullPath);
-            } else if (
-                entry.isFile() &&
-                extname(entry.name).toLowerCase() === ".json"
-            ) {
-                files.push(fullPath);
-            }
+            if (entry.isDirectory() && (entry.name.startsWith(".") || entry.name === "node_modules")) continue;
+            const full = resolve(dir, entry.name);
+            if (entry.isDirectory()) await walk(full);
+            else if (entry.isFile() && extname(entry.name).toLowerCase() === ".json" && !entry.name.endsWith(".cases.json")) files.push(full);
         }
     }
-
-    await walk(inputPath);
-
+    await walk(path);
+    if (!files.length) throw new Error(`No JSON files found in ${path}`);
     return files;
+}
+
+async function runCheck(options) {
+    const files = await findSchemas(resolve(options.positional[0]));
+    const issues = [];
+    const errors = [];
+    for (const file of files) {
+        try {
+            const schema = await readJson(file);
+            for (const issue of checkSchema(schema, options)) issues.push({ file: relative(process.cwd(), file), ...issue });
+        } catch (error) { errors.push({ file: relative(process.cwd(), file), message: error.message }); }
+    }
+    const result = { filesScanned: files.length, issues, errors };
+    if (options.format === "json") console.log(JSON.stringify(result, null, 2));
+    else {
+        for (const issue of issues) console.log(`${issue.file}\n  Warning: ${issue.message}\n  Location: ${issue.path}`);
+        for (const error of errors) console.error(`${error.file}\n  Error: ${error.message}`);
+        console.log(`Files scanned: ${files.length}\nPotential issues: ${issues.length}\nFile errors: ${errors.length}`);
+    }
+    return errors.length ? 2 : issues.length ? 1 : 0;
+}
+
+async function runCompare(options) {
+    const schemaPath = resolve(options.positional[0]);
+    const casesPath = resolve(options.positional[1]);
+    const schema = await readJson(schemaPath);
+    const cases = await readJson(casesPath);
+    if (!Array.isArray(cases) || cases.length === 0) throw new Error("Cases file must contain a non-empty JSON array.");
+    const result = compareSchema(schema, cases);
+    if (!result.conversionSucceeded) {
+        if (options.format === "json") console.log(JSON.stringify(result, null, 2));
+        else console.error(`Comparison failed during ${result.conversionError.stage}: ${result.conversionError.message}`);
+        return 2;
+    }
+    if (options.format === "json") console.log(JSON.stringify(result, null, 2));
+    else {
+        console.log(`Compared ${result.totalInputs} inputs: ${result.agreements} agreements, ${result.mismatchCount} mismatches.`);
+        for (const unsupported of result.unsupportedFeatures) console.log(`Unsupported feature: ${unsupported.keyword} at ${unsupported.path} (${unsupported.validator})`);
+        for (const mismatch of result.mismatches) {
+            console.log(`\n${mismatch.name} (input ${mismatch.index}) — ${mismatch.classification}`);
+            console.log(`  Input: ${JSON.stringify(mismatch.input)}`);
+            console.log(`  Ajv: ${mismatch.ajv.accepts ? "accept" : "reject"}; Zod: ${mismatch.zod.accepts ? "accept" : "reject"}`);
+        }
+    }
+    return result.mismatchCount ? 1 : 0;
 }
 
 async function main() {
     let options;
-
+    try { options = parseArgs(process.argv.slice(2)); }
+    catch (error) { console.error(`Error: ${error.message}\n\n${usage}`); process.exitCode = 2; return; }
+    if (options.help) { console.log(usage); return; }
     try {
-        options = parseArguments(process.argv.slice(2));
-    } catch (error) {
-        console.error(`Error: ${error.message}\n`);
-        printUsage();
-        process.exitCode = 2;
-        return;
-    }
-
-    if (options.help) {
-        printUsage();
-        return;
-    }
-
-    let files;
-
-    try {
-        files = await findSchemaFiles(options.input);
-    } catch (error) {
-        console.error(`Error: ${error.message}`);
-        process.exitCode = 2;
-        return;
-    }
-
-    if (files.length === 0) {
-        console.error("No JSON files found.");
-        process.exitCode = 2;
-        return;
-    }
-
-    const issues = [];
-    const errors = [];
-
-    for (const file of files) {
-        let schema;
-
-        try {
-            const content = await readFile(file, "utf8");
-            schema = JSON.parse(content);
-        } catch (error) {
-            errors.push({
-                file: relative(process.cwd(), file),
-                message: error.message
-            });
-            continue;
-        }
-
-        try {
-            const fileIssues = checkSchema(schema, {
-                target: options.target,
-                unsupportedKeywords: options.unsupportedKeywords
-            });
-
-            for (const issue of fileIssues) {
-                issues.push({
-                    file: relative(process.cwd(), file),
-                    ...issue
-                });
-            }
-        } catch (error) {
-            errors.push({
-                file: relative(process.cwd(), file),
-                message: error.message
-            });
-        }
-    }
-
-    if (options.format === "json") {
-        console.log(
-            JSON.stringify(
-                {
-                    filesScanned: files.length,
-                    issues,
-                    errors
-                },
-                null,
-                2
-            )
-        );
-    } else {
-        for (const issue of issues) {
-            console.log(`\n${issue.file}`);
-            console.log(`  ERROR  Potential compatibility gap`);
-            console.log(`  Target:   ${issue.target}`);
-            console.log(`  Keyword:  ${issue.keyword}`);
-            console.log(`  Location: ${issue.path}`);
-            console.log(`  ${issue.message}`);
-        }
-
-        for (const error of errors) {
-            console.error(`\n${error.file}`);
-            console.error(`  ERROR  ${error.message}`);
-        }
-
-        console.log(`\nFiles scanned: ${files.length}`);
-        console.log(`Potential issues: ${issues.length}`);
-        console.log(`File errors: ${errors.length}`);
-
-        if (issues.length === 0 && errors.length === 0) {
-            console.log(
-                "\nNo configured compatibility warnings found."
-            );
-            console.log(
-                "This does not prove that the validators are equivalent."
-            );
-        }
-    }
-
-    if (errors.length > 0) {
-        process.exitCode = 2;
-    } else if (issues.length > 0) {
-        process.exitCode = 1;
-    }
+        process.exitCode = options.command === "check" ? await runCheck(options) : await runCompare(options);
+    } catch (error) { console.error(`Error: ${error.message}`); process.exitCode = 2; }
 }
 
-main().catch((error) => {
-    console.error(`Unexpected error: ${error.message}`);
-    process.exitCode = 2;
-});
+main();
