@@ -82,7 +82,6 @@ export function checkSchema(schema, options = {}) {
             }
         }
 
-        // Visit keywords whose values are maps of schemas.
         for (const keyword of SCHEMA_MAP_KEYWORDS) {
             const children = current[keyword];
 

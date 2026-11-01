@@ -1,0 +1,12 @@
+{
+    "type": "object",
+    "properties": {
+        "child": {
+            "properties": {
+                "value": {
+                    "$dynamicRef": "#node"
+                }
+            }
+        }
+    }
+}
