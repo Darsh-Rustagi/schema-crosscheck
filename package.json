@@ -1,7 +1,8 @@
 {
-  "name": "schema-sentinel",
+  "name": "schema-crosscheck",
   "version": "0.1.0",
   "description": "Scan JSON Schemas and compare Ajv and Zod validation results",
+  "author": "Darsh Rustagi",
   "keywords": ["json-schema", "ajv", "zod", "validation", "testing", "cli"],
   "type": "module",
   "main": "./src/index.js",
@@ -9,7 +10,7 @@
     ".": "./src/index.js"
   },
   "bin": {
-    "schema-sentinel": "./src/cli.js"
+    "schema-crosscheck": "./src/cli.js"
   },
   "files": [
     "src",

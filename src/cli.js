@@ -4,11 +4,11 @@ import { extname, relative, resolve } from "node:path";
 import { checkSchema } from "./check.js";
 import { compareSchema } from "./compare.js";
 
-const usage = `Schema Sentinel — scan and compare JSON Schema validation
+const usage = `schema-crosscheck — scan and compare JSON Schema validation
 
 Usage:
-  schema-sentinel check <file-or-directory> --target <name> --unsupported <keywords>
-  schema-sentinel compare <schema.json> <cases.json> [--format text|json]
+  schema-crosscheck check <file-or-directory> --target <name> --unsupported <keywords>
+  schema-crosscheck compare <schema.json> <cases.json> [--format text|json]
 
 Options:
   --target <name>                 Target validator name (check)

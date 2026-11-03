@@ -13,7 +13,7 @@ function run(args) { return spawnSync(process.execPath, [cli, ...args], { cwd: r
 test("shows help and validates command arguments", () => {
     const help = run(["--help"]);
     assert.equal(help.status, 0);
-    assert.match(help.stdout, /schema-sentinel compare/);
+    assert.match(help.stdout, /schema-crosscheck compare/);
     assert.equal(run(["unknown"]).status, 2);
     assert.equal(run(["check", "schemas"]).status, 2);
     assert.equal(run(["compare", "a.json"]).status, 2);
@@ -41,7 +41,7 @@ test("check CLI returns warning exit code and machine-readable output", () => {
 });
 
 test("reports missing files, malformed JSON, and schema compilation errors", async (t) => {
-    const dir = await mkdtemp(join(tmpdir(), "schema-sentinel-"));
+    const dir = await mkdtemp(join(tmpdir(), "schema-crosscheck-"));
     t.after(() => rm(dir, { recursive: true, force: true }));
     assert.equal(run(["compare", join(dir, "missing.json"), join(dir, "cases.json")]).status, 2);
     const schemaPath = join(dir, "schema.json");
@@ -57,7 +57,7 @@ test("reports missing files, malformed JSON, and schema compilation errors", asy
 });
 
 test("directory scans skip hidden and dependency directories", async (t) => {
-    const dir = await mkdtemp(join(tmpdir(), "schema-sentinel-scan-"));
+    const dir = await mkdtemp(join(tmpdir(), "schema-crosscheck-scan-"));
     t.after(() => rm(dir, { recursive: true, force: true }));
     await writeFile(join(dir, "schema.json"), JSON.stringify({ type: "string" }));
     for (const ignored of ["node_modules", ".git", ".cache"]) {

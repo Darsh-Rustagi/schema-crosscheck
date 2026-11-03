@@ -1,6 +1,6 @@
-# Schema Sentinel
+# schema-crosscheck
 
-Schema Sentinel is a small JavaScript tool for finding configured JSON Schema compatibility risks and comparing validation outcomes from Ajv and Zod 4. It is a static scanner and test runner; it does not prove that two validators are equivalent.
+`schema-crosscheck` is a JavaScript tool by Darsh Rustagi for finding configured JSON Schema compatibility risks and comparing validation outcomes from Ajv and Zod 4. It is a static scanner and test runner; it does not prove that two validators are equivalent.
 
 ## Requirements and install
 
@@ -12,7 +12,7 @@ npm test
 npm link                    # optional: install the CLI locally
 ```
 
-After the package is published, install it in a project with `npm install schema-sentinel`; the `schema-sentinel` executable is registered from the package's `bin` entry. This repository is not published as part of this work.
+After the package is published, install it in a project with `npm install schema-crosscheck`; the `schema-crosscheck` executable is registered from the package's `bin` entry.
 
 The runtime dependencies are [Ajv](https://ajv.js.org/) to validate the original JSON Schema and [Zod 4](https://zod.dev/) to import and validate its converted schema. The test suite and CLI use Node.js built-ins; there is no runtime or test framework wrapper dependency.
 
@@ -48,7 +48,7 @@ Exit codes are `0` when execution succeeds with no warnings or mismatches, `1` w
 ## JavaScript API
 
 ```js
-import { checkSchema, compareSchema } from "schema-sentinel";
+import { checkSchema, compareSchema } from "schema-crosscheck";
 
 const issues = checkSchema(schema, {
   target: "Zod",
